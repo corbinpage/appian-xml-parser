@@ -1,0 +1,22 @@
+{
+  "name": "appian-xml-parser",
+  "version": "1.0.0",
+  "description": "appian-xml-parser",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/corbinpage/appian-xml-parser.git"
+  },
+  "author": "Corbin Page",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/corbinpage/appian-xml-parser/issues"
+  },
+  "homepage": "https://github.com/corbinpage/appian-xml-parser",
+  "dependencies": {
+    "jquery": "^2.1.4"
+  }
+}

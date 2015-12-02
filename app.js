@@ -1,52 +1,80 @@
 var fs = require('fs');
-var path = require('path');
+var babyParse = require('babyParse');
+var JSZip = require('jszip');
+var _ = require('underscore');
+var util = require('util');
+var parseString = require('xml2js').parseString;
 
-var matches = [];
+var findText = "@mlp";
 var outputFile = 'outputDev.txt';
-fs.writeFileSync(outputFile, 'File | Snippet \n');
+var csvResults = {
+  fields: ["Object Name", "UUID", "File", "Snippet"],
+  data: []
+};
 
-function inspectFile(file) {
-  var regexp = /@mlp/g;
+
+function inspectZipFile(zipFile) {
+  var subfolder = zipFile.name.substring(0,zipFile.name.indexOf("/"));
+  var fileText = zipFile.asText();
+  var name, uuid;
+
+
+  switch(subfolder) {
+    case 'content':
+    parseString(fileText, function (err, fileJson) {
+
+      if(!fileJson) {
+        name = "Document or Other"; 
+        var first = zipFile.name.indexOf("/");
+        uuid = zipFile.name.substring(first+1,zipFile.name.indexOf("/",first+1));
+
+      } else if(fileJson['contentHaul']) {
+        name = fileText.substring(fileText.indexOf("<name>")+6,fileText.indexOf("</name>"));
+        uuid = fileText.substring(fileText.indexOf("<uuid>")+6,fileText.indexOf("</uuid>"));
+      }
+
+      searchForText(fileText, [name, uuid, zipFile.name]);
+    });   
+    break;
+
+    case 'processModel':
+    name = "ProcessModel"; 
+    uuid = zipFile.name.substring(zipFile.name.indexOf("/")+1);
+
+    searchForText(fileText, [name, uuid, zipFile.name]);
+    break;
+
+    case 'META-INF':
+
+    break;
+
+    default:
+    name = "Other"; 
+    uuid = zipFile.name.substring(zipFile.name.indexOf("/")+1);
+    
+    searchForText(fileText, [name, uuid, zipFile.name]);
+  }
+
+}
+
+function searchForText(fileText, info) {
+  var regexp = new RegExp(findText, "g");
   var match;
-  var contentsNewLine = fs.readFileSync(file, 'utf8');
-  var contents = contentsNewLine.replace(/\r?\n|\r/g, " ").replace("  ", "");
-  
-  while ((match = regexp.exec(contents)) != null) {
-    console.log('Match: ' + file + '| ' + contents.substr(match.index-100, 200));
-    matches.push(match.index);
-    fs.appendFileSync(outputFile,
-      file + '| ' + contents.substr(match.index-100, 200) + '\n'
-      );
+
+  while ((match = regexp.exec(fileText)) != null) {
+    csvResults.data.push(info.concat(fileText.substring(match.index-150, match.index+150)));
   }
 }
 
-var walk = function(dir, done) {
-  var results = [];
-  fs.readdir(dir, function(err, list) {
-    if (err) return done(err);
-    var i = 0;
-    (function next() {
-      var file = list[i++];
-      if (!file) return done(null, results);
-      file = dir + '/' + file;
-      fs.stat(file, function(err, stat) {
-        if (stat && stat.isDirectory()) {
-          walk(file, function(err, res) {
-            results = results.concat(res);
-            next();
-          });
-        } else {
-          inspectFile(file);
-          results.push(file);
-          next();
-        }
-      });
-    })();
-  });
-};
 
-walk('./appian-package-examples/Trader-Master-Dev/', function(err, results) {
+fs.readFile('./appian-package-examples/Trader-Master-Dev.zip', function(err, data) {
   if (err) throw err;
-  // console.log(results);
-  console.log(matches);
+  var zip = new JSZip(data);
+
+  _.each(zip.files, function (zipEntry) {
+    console.log(zipEntry.name);
+    inspectZipFile(zipEntry);
+  });
+  fs.writeFileSync("outputTest.csv", babyParse.unparse(csvResults));
+
 });

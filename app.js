@@ -5,10 +5,11 @@ var _ = require('underscore');
 var util = require('util');
 var parseString = require('xml2js').parseString;
 
+// var findText = "trader";
 var findText = "@mlp";
 var outputFile = 'outputDev.txt';
 var csvResults = {
-  fields: ["Object Name", "UUID", "File", "Snippet"],
+  fields: ["Object Name", "UUID", "Type", "File", "Snippet"],
   data: []
 };
 
@@ -18,13 +19,16 @@ function inspectZipFile(zipFile) {
   var fileText = zipFile.asText();
   var name, uuid;
 
-
   switch(subfolder) {
     case 'content':
     parseString(fileText, function (err, fileJson) {
+      if err throw err;
+
+      name = "Other"; 
+      uuid = zipFile.name.substring(zipFile.name.indexOf("/")+1);
 
       if(!fileJson) {
-        name = "Document or Other"; 
+        name = "Document"; 
         var first = zipFile.name.indexOf("/");
         uuid = zipFile.name.substring(first+1,zipFile.name.indexOf("/",first+1));
 
@@ -33,15 +37,21 @@ function inspectZipFile(zipFile) {
         uuid = fileText.substring(fileText.indexOf("<uuid>")+6,fileText.indexOf("</uuid>"));
       }
 
-      searchForText(fileText, [name, uuid, zipFile.name]);
+      searchForTextAndSave(fileText, [name, uuid, subfolder, zipFile.name]);
     });   
     break;
 
     case 'processModel':
     name = "ProcessModel"; 
-    uuid = zipFile.name.substring(zipFile.name.indexOf("/")+1);
+    parseString(fileText, function (err, fileJson) {
 
-    searchForText(fileText, [name, uuid, zipFile.name]);
+      if(fileJson && fileJson['processModelHaul']) {
+        name = searchJsonForProperty(fileJson,'processModelHaul.process_model_port[0].pm[0].meta[0].name[0].string-map[0].pair[0].value[0]');
+        uuid = searchJsonForProperty(fileJson,'processModelHaul.process_model_port[0].pm[0].meta[0].uuid');
+      }
+
+      searchForTextAndSave(fileText, [name, uuid, subfolder, zipFile.name]);
+    });   
     break;
 
     case 'META-INF':
@@ -51,18 +61,33 @@ function inspectZipFile(zipFile) {
     default:
     name = "Other"; 
     uuid = zipFile.name.substring(zipFile.name.indexOf("/")+1);
-    
-    searchForText(fileText, [name, uuid, zipFile.name]);
+
+    searchForTextAndSave(fileText, [name, uuid, subfolder, zipFile.name]);
   }
 
 }
 
-function searchForText(fileText, info) {
+function searchJsonForProperty(o, s) {
+    s = s.replace(/\[(\w+)\]/g, '.$1'); // convert indexes to properties
+    s = s.replace(/^\./, '');           // strip a leading dot
+    var a = s.split('.');
+    for (var i = 0, n = a.length; i < n; ++i) {
+        var k = a[i];
+        if (k in o) {
+            o = o[k];
+        } else {
+            return;
+        }
+    }
+    return o;
+}
+
+function searchForTextAndSave(fileText, fileInfo) {
   var regexp = new RegExp(findText, "g");
   var match;
 
   while ((match = regexp.exec(fileText)) != null) {
-    csvResults.data.push(info.concat(fileText.substring(match.index-150, match.index+150)));
+    csvResults.data.push(fileInfo.concat(fileText.substring(match.index-150, match.index+150)));
   }
 }
 
@@ -72,7 +97,7 @@ fs.readFile('./appian-package-examples/Trader-Master-Dev.zip', function(err, dat
   var zip = new JSZip(data);
 
   _.each(zip.files, function (zipEntry) {
-    console.log(zipEntry.name);
+    // console.log(zipEntry.name);
     inspectZipFile(zipEntry);
   });
   fs.writeFileSync("outputTest.csv", babyParse.unparse(csvResults));
